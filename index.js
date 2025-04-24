@@ -22,7 +22,7 @@ const difficultyLevels = {
     },
     'level 4': {
         x: 50,
-        y: 25,
+        y: 30,
         mines: 99
     }
     

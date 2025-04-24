@@ -1,16 +1,19 @@
 
 
+
 class Minesweeper {
-    constructor(ratioX, ratioY, board, mineCounter) {
-        this.ratioX = ratioX; // Số cột (width)
-        this.ratioY = ratioY; // Số hàng (height)
+    constructor(ratioX, ratioY, board, mineCounter, isInteractive) {
+        this.ratioX = ratioX;
+        this.ratioY = ratioY;
         this.board = board;
         this.mineCounter = mineCounter;
         this.isMines = [];
         this.openedCells = 0;
         this.gameOver = false;
         this.flags = new Set();
+        this.isInteractive = isInteractive;
     }
+
 
     getTotalCells() {
         return this.ratioX * this.ratioY;
@@ -90,7 +93,7 @@ class Minesweeper {
     }
 
     openCell(index) {
-        if (this.gameOver || this.flags.has(index)) return;
+        if (!this.isInteractive || this.gameOver || this.flags.has(index)) return;
 
         const cell = document.getElementById(`data-${index}`);
         if (!cell.classList.contains('closed')) return;
@@ -101,12 +104,27 @@ class Minesweeper {
 
         if (this.isMines.includes(index)) {
             cell.innerHTML = '<div>💣</div>';
+            socket.emit('game-over', {
+                roomId: currentRoom,
+                winner: playerRole === 'playerA' ? 'playerB' : 'playerA'
+            });
             this.endGame(false);
             return;
         }
 
         const count = Number(cell.dataset.count);
         cell.innerHTML = count > 0 ? count : '';
+
+        // Notify opponent about this move
+        if (this.isInteractive) {
+            socket.emit('cell-opened', {
+                roomId: currentRoom,
+                playerRole: playerRole,
+                index: index,
+                count: count,
+                isMine: false
+            });
+        }
 
         if (count === 0) {
             const neighbors = this.getIndexAround(index);
@@ -116,12 +134,31 @@ class Minesweeper {
         }
 
         if (this.openedCells === this.getTotalCells() - this.isMines.length) {
+            socket.emit('game-over', {
+                roomId: currentRoom,
+                winner: playerRole
+            });
             this.endGame(true);
+        }
+    }
+    openCellRemote(index, count, isMine) {
+        if (this.gameOver) return;
+
+        const cell = document.getElementById(`data-${index}`);
+        if (!cell.classList.contains('closed')) return;
+
+        cell.classList.remove('closed');
+        cell.classList.add('opend');
+        
+        if (isMine) {
+            cell.innerHTML = '<div>💣</div>';
+        } else {
+            cell.innerHTML = count > 0 ? count : '';
         }
     }
 
     toggleFlag(index) {
-        if (this.gameOver) return;
+        if (!this.isInteractive || this.gameOver) return;
 
         const cell = document.getElementById(`data-${index}`);
         if (!cell.classList.contains('closed')) return;
@@ -135,6 +172,25 @@ class Minesweeper {
         }
 
         this.updateMineCounter();
+
+        // Notify opponent about flag change
+        if (this.isInteractive) {
+            socket.emit('flag-toggled', {
+                roomId: currentRoom,
+                playerRole: playerRole,
+                index: index,
+                hasFlag: this.flags.has(index)
+            });
+        }
+    }
+
+    toggleFlagRemote(index, hasFlag) {
+        if (this.gameOver) return;
+
+        const cell = document.getElementById(`data-${index}`);
+        if (!cell.classList.contains('closed')) return;
+
+        cell.innerHTML = hasFlag ? '<div>🚩</div>' : '';
     }
 
     updateMineCounter() {
